@@ -49,11 +49,38 @@ auto RouterHandler::handle_key_operation(Connection& con,
 auto RouterHandler::handle_join_cluster(Connection& con,
                                         const cloud::CloudMessage& msg)
     -> void {
-  // TODO (you)
+  add_new_node(SocketAddress(msg.address().address()));
+
+  cloud::CloudMessage response{};
+  response.set_type(cloud::CloudMessage_Type_RESPONSE);
+  response.set_operation(cloud::CloudMessage_Operation_JOIN_CLUSTER);
+  response.set_success(true);
+
+  con.send(response);
 }
 
 auto RouterHandler::add_new_node(const SocketAddress& peer) -> void {
-  // TODO (you)
+  auto peers = routing.partitions_by_peer();
+  size_t numberPeers = peers.size()+1;
+
+  if(peers.empty()){
+    for(uint32_t partition = 0; partition < routing.get_partitions(); ++partition){
+      routing.add_peer(partition, peer);
+    }
+  } else {
+    size_t numberPartitionsPerNode = routing.get_partitions()/numberPeers;
+
+    for(auto &p: peers){
+      const SocketAddress &oldPeer = p.first;
+      auto &partitions = p.second;
+      while(partitions.size() > numberPartitionsPerNode){
+        uint32_t partition = *partitions.begin();
+        routing.remove_peer(partition, oldPeer);
+        routing.add_peer(partition, peer);
+        partitions.erase(partition);
+      }
+    }
+  }
 }
 
 auto RouterHandler::redistribute_partitions() -> void {

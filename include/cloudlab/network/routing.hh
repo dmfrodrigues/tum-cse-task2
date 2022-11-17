@@ -73,6 +73,10 @@ class Routing {
     partitions = cluster_partitions;
   }
 
+  auto get_partitions() -> size_t {
+    return partitions;
+  }
+
  private:
   size_t partitions{1};
 
