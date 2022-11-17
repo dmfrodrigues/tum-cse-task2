@@ -25,24 +25,36 @@ class Routing {
   }
 
   auto add_peer(uint32_t partition, const SocketAddress& peer) {
-    // TODO (you)
+    auto &part = table[partition];
+    part.push_back(peer);
   }
 
   auto remove_peer(uint32_t partition, const SocketAddress& peer) {
-    // TODO (you)
+    auto &part = table[partition];
+    part.erase(find(part.begin(), part.end(), peer));
+    if(part.empty()) table.erase(partition);
   }
 
   auto find_peer(const std::string& key) -> std::optional<SocketAddress> {
-    // TODO (you)
+    if(table.empty()) return std::nullopt;
+
+    return table.at(get_partition(key)).at(0);
   }
 
   auto get_partition(const std::string& key) const -> uint32_t {
-    // TODO (you)
+    return std::hash<std::string>()(key) % partitions;
   }
 
   auto partitions_by_peer()
       -> std::unordered_map<SocketAddress, std::unordered_set<uint32_t>> {
-    // TODO (you)
+    std::unordered_map<SocketAddress, std::unordered_set<uint32_t>> ret;
+    for(const auto &p: table){
+      const uint32_t partition = p.first;
+      for(const SocketAddress &addr: p.second){
+        ret[addr].insert(partition);
+      }
+    }
+    return ret;
   }
 
   auto get_cluster_address() -> std::optional<SocketAddress> {
