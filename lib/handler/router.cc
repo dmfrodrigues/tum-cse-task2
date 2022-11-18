@@ -43,7 +43,42 @@ auto RouterHandler::handle_connection(Connection& con) -> void {
 auto RouterHandler::handle_key_operation(Connection& con,
                                          const cloud::CloudMessage& msg)
     -> void {
-  // TODO (you)
+  cloud::CloudMessage response;
+  response.set_type(msg.type());
+  response.set_operation(msg.operation());
+
+  bool success = true;
+  auto kvps = msg.kvp();
+  for(const auto &kvp: kvps){
+    const std::string &key = kvp.key();
+    const std::string &value = kvp.value();
+    const std::optional<SocketAddress> &addr = routing.find_peer(key);
+    if(addr){
+      Connection peerCon(*addr);
+      
+      cloud::CloudMessage peerMessage;
+      peerMessage.set_type(msg.type());
+      peerMessage.set_operation(msg.operation());
+      auto *tmp = peerMessage.add_kvp();
+      tmp->set_key(key);
+      tmp->set_value(value);
+
+      peerCon.send(peerMessage);
+
+      cloud::CloudMessage peerResponse;
+      peerCon.receive(peerResponse);
+
+      for(const auto &p: peerResponse.kvp()){
+        auto *tmp = response.add_kvp();
+        tmp->set_key(p.key());
+        tmp->set_value(p.value());
+      }
+
+      success &= peerResponse.success();
+    }
+  }
+
+  response.set_success(success);
 }
 
 auto RouterHandler::handle_join_cluster(Connection& con,
