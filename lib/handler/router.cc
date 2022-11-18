@@ -130,9 +130,8 @@ auto RouterHandler::redistribute_partitions() -> void {
       }
     }
 
-    for(auto &p: peers){
-      const SocketAddress &peer = p.first;
-      auto &partitions = p.second;
+    for(const SocketAddress &peer: nodes){
+      auto &partitions = peers[peer];
       while(!partitionsReassigned.empty() && partitions.size() < numberPartitionsPerNode){
         uint32_t partition = *partitionsReassigned.begin();
         partitionsReassigned.erase(partition);
