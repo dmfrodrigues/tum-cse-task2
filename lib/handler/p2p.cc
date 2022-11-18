@@ -70,13 +70,16 @@ auto P2PHandler::handle_connection(Connection& con) -> void {
 
 auto P2PHandler::handle_put(Connection& con, const cloud::CloudMessage& msg)
     -> void {
-  // TODO (you)
+  cloud::CloudMessage response{};
   response.set_type(cloud::CloudMessage_Type_RESPONSE);
   response.set_success(true);
   response.set_message("OK");
 
   for (const auto& kvp : msg.kvp()) {
     auto* tmp = response.add_kvp();
+
+    KVS &kvs = *partitions.at(0).get();
+
     tmp->set_key(kvp.key());
     if (kvs.put(kvp.key(), kvp.value())) {
       tmp->set_value("OK");
@@ -92,7 +95,6 @@ auto P2PHandler::handle_put(Connection& con, const cloud::CloudMessage& msg)
 
 auto P2PHandler::handle_get(Connection& con, const cloud::CloudMessage& msg)
     -> void {
-  // TODO (you)
   cloud::CloudMessage response{};
   std::string value;
 
@@ -102,6 +104,9 @@ auto P2PHandler::handle_get(Connection& con, const cloud::CloudMessage& msg)
 
   for (const auto& kvp : msg.kvp()) {
     auto* tmp = response.add_kvp();
+
+    KVS &kvs = *partitions.at(0).get();
+
     tmp->set_key(kvp.key());
     if (kvs.get(kvp.key(), value)) {
       tmp->set_value(value);
@@ -123,6 +128,9 @@ auto P2PHandler::handle_delete(Connection& con, const cloud::CloudMessage& msg)
 
   for (const auto& kvp : msg.kvp()) {
     auto* tmp = response.add_kvp();
+
+    KVS &kvs = *partitions.at(0).get();
+
     tmp->set_key(kvp.key());
 
     if (kvs.remove(kvp.key())) {

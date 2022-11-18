@@ -79,6 +79,8 @@ auto RouterHandler::handle_key_operation(Connection& con,
   }
 
   response.set_success(success);
+
+  con.send(response);
 }
 
 auto RouterHandler::handle_join_cluster(Connection& con,
@@ -107,7 +109,7 @@ auto RouterHandler::redistribute_partitions() -> void {
   if(peers.empty()){
     uint32_t partition = 0;
     for(const SocketAddress &peer: nodes){
-      while(peers[peer].size() < numberPartitionsPerNode){
+      while(partition < routing.get_partitions() && peers[peer].size() < numberPartitionsPerNode){
         routing.add_peer(partition, peer);
         ++partition;
       }
