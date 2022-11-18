@@ -60,31 +60,49 @@ auto RouterHandler::handle_join_cluster(Connection& con,
 }
 
 auto RouterHandler::add_new_node(const SocketAddress& peer) -> void {
-  auto peers = routing.partitions_by_peer();
-  size_t numberPeers = peers.size()+1;
-
-  if(peers.empty()){
-    for(uint32_t partition = 0; partition < routing.get_partitions(); ++partition){
-      routing.add_peer(partition, peer);
-    }
-  } else {
-    size_t numberPartitionsPerNode = routing.get_partitions()/numberPeers;
-
-    for(auto &p: peers){
-      const SocketAddress &oldPeer = p.first;
-      auto &partitions = p.second;
-      while(partitions.size() > numberPartitionsPerNode){
-        uint32_t partition = *partitions.begin();
-        routing.remove_peer(partition, oldPeer);
-        routing.add_peer(partition, peer);
-        partitions.erase(partition);
-      }
-    }
-  }
+  nodes.insert(peer);
+  redistribute_partitions();
 }
 
 auto RouterHandler::redistribute_partitions() -> void {
-  // TODO (you)
+  auto peers = routing.partitions_by_peer();
+  const size_t &numberPeers = nodes.size();
+  const size_t numberPartitionsPerNode = routing.get_partitions()/numberPeers;
+
+  if(peers.empty()){
+    uint32_t partition = 0;
+    for(const SocketAddress &peer: nodes){
+      while(peers[peer].size() < numberPartitionsPerNode){
+        routing.add_peer(partition, peer);
+        ++partition;
+      }
+    }
+  } else {
+    size_t numberPartitionsPerNode = routing.get_partitions()/numberPeers;
+    std::set<uint32_t> partitionsReassigned;
+
+    for(auto &p: peers){
+      const SocketAddress &peer = p.first;
+      auto &partitions = p.second;
+      while(partitions.size() > numberPartitionsPerNode){
+        uint32_t partition = *partitions.begin();
+        partitionsReassigned.insert(partition);
+        routing.remove_peer(partition, peer);
+        partitions.erase(partition);
+      }
+    }
+
+    for(auto &p: peers){
+      const SocketAddress &peer = p.first;
+      auto &partitions = p.second;
+      while(!partitionsReassigned.empty() && partitions.size() < numberPartitionsPerNode){
+        uint32_t partition = *partitionsReassigned.begin();
+        partitionsReassigned.erase(partition);
+        routing.add_peer(partition, peer);
+        partitions.insert(partition);
+      }
+    }
+  }
 }
 
 auto RouterHandler::handle_partitions_added(Connection& con,
