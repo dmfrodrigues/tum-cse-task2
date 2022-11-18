@@ -92,6 +92,7 @@ auto RouterHandler::handle_join_cluster(Connection& con,
   response.set_type(cloud::CloudMessage_Type_RESPONSE);
   response.set_operation(cloud::CloudMessage_Operation_JOIN_CLUSTER);
   response.set_success(true);
+  response.set_message("OK");
 
   con.send(response);
 }
