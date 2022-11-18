@@ -120,7 +120,6 @@ auto P2PHandler::handle_get(Connection& con, const cloud::CloudMessage& msg)
 
 auto P2PHandler::handle_delete(Connection& con, const cloud::CloudMessage& msg)
     -> void {
-  // TODO (you)
   cloud::CloudMessage response{};
   response.set_type(cloud::CloudMessage_Type_RESPONSE);
   response.set_success(true);
