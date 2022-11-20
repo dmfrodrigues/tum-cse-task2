@@ -7,9 +7,6 @@
 namespace cloudlab {
 
 P2PHandler::P2PHandler(Routing& routing) : routing{routing} {
-  auto hash = std::hash<SocketAddress>()(routing.get_backend_address());
-  auto path = fmt::format("/tmp/{}-initial", hash);
-  partitions.insert({0, std::make_unique<KVS>(path)});
 }
 
 auto P2PHandler::handle_connection(Connection& con) -> void {
@@ -73,20 +70,27 @@ auto P2PHandler::handle_put(Connection& con, const cloud::CloudMessage& msg)
   cloud::CloudMessage response{};
   response.set_type(cloud::CloudMessage_Type_RESPONSE);
   response.set_success(true);
-  response.set_message("OK");
 
   for (const auto& kvp : msg.kvp()) {
     auto* tmp = response.add_kvp();
-
-    KVS &kvs = *partitions.at(0).get();
-
     tmp->set_key(kvp.key());
-    if (kvs.put(kvp.key(), kvp.value())) {
-      tmp->set_value("OK");
-    } else {
+
+    uint32_t partition = routing.get_partition(kvp.key());
+
+    if(!partitions.count(partition)){
       tmp->set_value("ERROR");
       response.set_success(false);
       response.set_message("ERROR");
+    } else {
+      KVS &kvs = *partitions.at(partition).get();
+
+      if (kvs.put(kvp.key(), kvp.value())) {
+        tmp->set_value("OK");
+      } else {
+        tmp->set_value("ERROR");
+        response.set_success(false);
+        response.set_message("ERROR");
+      }
     }
   }
 
@@ -104,14 +108,23 @@ auto P2PHandler::handle_get(Connection& con, const cloud::CloudMessage& msg)
 
   for (const auto& kvp : msg.kvp()) {
     auto* tmp = response.add_kvp();
-
-    KVS &kvs = *partitions.at(0).get();
-
     tmp->set_key(kvp.key());
-    if (kvs.get(kvp.key(), value)) {
-      tmp->set_value(value);
-    } else {
+
+    uint32_t partition = routing.get_partition(kvp.key());
+
+    if(!partitions.count(partition)){
       tmp->set_value("ERROR");
+      response.set_success(false);
+      response.set_message("ERROR");
+    } else {
+      KVS &kvs = *partitions.at(partition).get();
+
+      tmp->set_key(kvp.key());
+      if (kvs.get(kvp.key(), value)) {
+        tmp->set_value(value);
+      } else {
+        tmp->set_value("ERROR");
+      }
     }
   }
 
@@ -126,16 +139,23 @@ auto P2PHandler::handle_delete(Connection& con, const cloud::CloudMessage& msg)
   response.set_message("OK");
 
   for (const auto& kvp : msg.kvp()) {
-    auto* tmp = response.add_kvp();
-
-    KVS &kvs = *partitions.at(0).get();
-
+ auto* tmp = response.add_kvp();
     tmp->set_key(kvp.key());
 
-    if (kvs.remove(kvp.key())) {
-      tmp->set_value("OK");
-    } else {
+    uint32_t partition = routing.get_partition(kvp.key());
+
+    if(!partitions.count(partition)){
       tmp->set_value("ERROR");
+      response.set_success(false);
+      response.set_message("ERROR");
+    } else {
+      KVS &kvs = *partitions.at(partition).get();
+
+      if (kvs.remove(kvp.key())) {
+        tmp->set_value("OK");
+      } else {
+        tmp->set_value("ERROR");
+      }
     }
   }
 
@@ -150,7 +170,18 @@ auto P2PHandler::handle_join_cluster(Connection& con,
 auto P2PHandler::handle_create_partitions(Connection& con,
                                           const cloud::CloudMessage& msg)
     -> void {
-  // TODO (you)
+  auto hash = std::hash<SocketAddress>()(routing.get_backend_address());
+  for(const auto &p: msg.partition()){
+    auto path = fmt::format("/tmp/kvs-{}-{}", hash, p.id());
+    partitions.insert({p.id(), std::make_unique<KVS>(path)});
+  }
+
+  cloud::CloudMessage response;
+  response.set_type(cloud::CloudMessage_Type_RESPONSE);
+  response.set_operation(cloud::CloudMessage_Operation_CREATE_PARTITIONS);
+  response.set_success(true);
+  response.set_message("OK");
+  con.send(response);
 }
 
 auto P2PHandler::handle_steal_partitions(Connection& con,
@@ -168,7 +199,20 @@ auto P2PHandler::handle_drop_partitions(Connection& con,
 auto P2PHandler::handle_transfer_partition(Connection& con,
                                            const cloud::CloudMessage& msg)
     -> void {
-  // TODO (you)
+  auto hash = std::hash<SocketAddress>()(routing.get_backend_address());
+  for(const auto &p: msg.partition()){
+    if(partitions.count(p.id()) <= 0){
+      auto path = fmt::format("/tmp/kvs-{}-{}", hash, p.id());
+      partitions.insert({p.id(), std::make_unique<KVS>(path)});
+    }
+  }
+
+  cloud::CloudMessage response;
+  response.set_type(cloud::CloudMessage_Type_RESPONSE);
+  response.set_operation(cloud::CloudMessage_Operation_CREATE_PARTITIONS);
+  response.set_success(true);
+  response.set_message("OK");
+  con.send(response);
 }
 
 }  // namespace cloudlab

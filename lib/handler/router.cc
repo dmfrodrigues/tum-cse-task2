@@ -4,6 +4,8 @@
 
 #include "cloud.pb.h"
 
+#include <list>
+
 namespace cloudlab {
 
 auto RouterHandler::handle_connection(Connection& con) -> void {
@@ -126,20 +128,32 @@ auto RouterHandler::redistribute_partitions() -> void {
     uint32_t partition = 0;
     for(const SocketAddress &peer: nodes){
       while(partition < routing.get_partitions() && peers[peer].size() < numberPartitionsPerNode){
+        cloud::CloudMessage msg;
+        msg.set_type(cloud::CloudMessage_Type_REQUEST);
+        msg.set_operation(cloud::CloudMessage_Operation_CREATE_PARTITIONS);
+        auto *tmp = msg.add_partition();
+        tmp->set_id(partition);
+        tmp->set_peer(peer.string());
+        Connection conn(peer);
+        conn.send(msg);
+
+        cloud::CloudMessage response;
+        conn.receive(response);
+
         routing.add_peer(partition, peer);
         ++partition;
       }
     }
   } else {
     size_t numberPartitionsPerNode = routing.get_partitions()/numberPeers;
-    std::set<uint32_t> partitionsReassigned;
+    std::set<std::pair<uint32_t, std::string>> partitionsReassigned;
 
     for(auto &p: peers){
       const SocketAddress &peer = p.first;
       auto &partitions = p.second;
       while(partitions.size() > numberPartitionsPerNode){
         uint32_t partition = *partitions.begin();
-        partitionsReassigned.insert(partition);
+        partitionsReassigned.insert(std::make_pair(partition, peer.string()));
         routing.remove_peer(partition, peer);
         partitions.erase(partition);
       }
@@ -148,8 +162,22 @@ auto RouterHandler::redistribute_partitions() -> void {
     for(const SocketAddress &peer: nodes){
       auto &partitions = peers[peer];
       while(!partitionsReassigned.empty() && partitions.size() < numberPartitionsPerNode){
-        uint32_t partition = *partitionsReassigned.begin();
-        partitionsReassigned.erase(partition);
+        auto p = *partitionsReassigned.begin(); partitionsReassigned.erase(partitionsReassigned.begin());
+        const uint32_t &partition = p.first;
+        const std::string &peerAddress = p.second;
+
+        cloud::CloudMessage msg;
+        msg.set_type(cloud::CloudMessage_Type_REQUEST);
+        msg.set_operation(cloud::CloudMessage_Operation_TRANSFER_PARTITION);
+        auto *tmp = msg.add_partition();
+        tmp->set_id(partition);
+        tmp->set_peer(peerAddress);
+        Connection conn(peer);
+        conn.send(msg);
+
+        cloud::CloudMessage response;
+        conn.receive(response);
+
         routing.add_peer(partition, peer);
         partitions.insert(partition);
       }
