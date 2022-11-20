@@ -187,7 +187,33 @@ auto P2PHandler::handle_create_partitions(Connection& con,
 auto P2PHandler::handle_steal_partitions(Connection& con,
                                          const cloud::CloudMessage& msg)
     -> void {
-  // TODO (you)
+  cloud::CloudMessage response;
+  response.set_type(cloud::CloudMessage_Type_RESPONSE);
+  response.set_operation(cloud::CloudMessage_Operation_STEAL_PARTITIONS);
+
+  for(const auto &p: msg.partition()){
+    const uint32_t &partition = p.id();
+
+    if(partitions.count(partition) >= 0){
+      KVS &kvs = *partitions.at(partition).get();
+
+      std::vector<std::pair<std::string, std::string>> buffer;
+      if(kvs.get_all(buffer)){
+        for(const auto &kvp: buffer){
+          const std::string &key = kvp.first;
+          const std::string &value = kvp.second;
+          
+          auto *tmp = response.add_kvp();
+          tmp->set_key(key);
+          tmp->set_value(value);
+        }
+      }
+    }
+  }
+
+  response.set_success(true);
+
+  con.send(response);
 }
 
 auto P2PHandler::handle_drop_partitions(Connection& con,
@@ -210,8 +236,37 @@ auto P2PHandler::handle_transfer_partition(Connection& con,
   cloud::CloudMessage response;
   response.set_type(cloud::CloudMessage_Type_RESPONSE);
   response.set_operation(cloud::CloudMessage_Operation_CREATE_PARTITIONS);
-  response.set_success(true);
-  response.set_message("OK");
+  bool success = true;
+
+  for(const auto &p: msg.partition()){
+    const uint32_t &partition = p.id();
+    const std::string &peerAddress = p.peer();
+
+    Connection stealConnection(p.peer());
+
+    cloud::CloudMessage stealMessage;
+    stealMessage.set_type(cloud::CloudMessage_Type_REQUEST);
+    stealMessage.set_operation(cloud::CloudMessage_Operation_STEAL_PARTITIONS);
+    auto *tmp = stealMessage.add_partition();
+    tmp->set_id(partition);
+    tmp->set_peer(peerAddress);
+
+    stealConnection.send(stealMessage);
+
+    cloud::CloudMessage stealResponse;
+    stealConnection.receive(stealResponse);
+
+    if(!stealResponse.success()) success = false;
+    else {
+      KVS &kvs = *partitions.at(partition).get();
+      for(const auto &kvp: stealResponse.kvp()){
+        kvs.put(kvp.key(), kvp.value());
+      }
+    }
+  }
+
+  response.set_success(success);
+
   con.send(response);
 }
 

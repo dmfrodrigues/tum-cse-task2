@@ -49,8 +49,6 @@ auto RouterHandler::handle_key_operation(Connection& con,
   response.set_type(msg.type());
   response.set_operation(msg.operation());
 
-  // std::cout << "L" << __LINE__ << std::endl;
-
   bool success = true;
   auto kvps = msg.kvp();
   for(const auto &kvp: kvps){
