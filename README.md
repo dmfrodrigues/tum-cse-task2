@@ -1,5 +1,7 @@
 # Task 2 - Distributed key-value store (KVS)
 
+[![GitHub Classroom Workflow](https://github.com/dmfrodrigues/tum-cse-task2/actions/workflows/classroom.yml/badge.svg)](https://github.com/dmfrodrigues/tum-cse-task2/actions/workflows/classroom.yml)
+
 In this task you will extend the single-node key-value store (KVS) to multiple
 nodes by sharding (partitioning) keys.
 
